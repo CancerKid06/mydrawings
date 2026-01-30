@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Test 1: Name the Drawing</title>
+  <style>
+    /* Dark theme and centered layout */
+    :root{--bg:#0f1111;--card:#151617;--accent:#7bd389;--muted:#9aa0a6}
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(180deg,#0b0c0d 0%, #111 60%);color:#e6eef3}
+    .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{width:100%;max-width:560px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border-radius:12px;padding:20px;box-shadow:0 6px 24px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.03)}
+    .title{font-size:16px;color:var(--muted);text-align:center;margin-bottom:8px}
+
+    /* Image area */
+    .stage{display:flex;flex-direction:column;align-items:center;gap:12px}
+    .drawing{width:100%;height:320px;background:#0b0b0b;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+    .drawing img{max-width:100%;max-height:100%;object-fit:contain;display:block;opacity:0;transform:translateY(6px);transition:opacity .45s ease,transform .45s ease}
+    .drawing.show img{opacity:1;transform:translateY(0)}
+
+    /* Answers bubble (shows correct answers submitted). Alternates left/right via classes. */
+    .answers-bubble{position:absolute;top:12px;min-width:88px;max-width:160px;padding:10px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border:1px solid rgba(255,255,255,0.04);box-shadow:0 6px 18px rgba(0,0,0,0.45);color:var(--muted);font-size:13px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+    .answers-bubble.left{left:-84px}
+    /* Keep the bubble further to the right so it doesn't overlay the drawing */
+    .answers-bubble.right{right:-120px}
+    .answers-bubble .chip{background:rgba(123,211,137,0.12);color:var(--accent);padding:6px 10px;border-radius:999px;font-weight:600;font-size:13px;display:block}
+
+    /* Input area */
+    .controls{width:100%;display:flex;gap:8px;align-items:center}
+    input[type="text"]{flex:1;padding:12px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:#0b0c0d;color:var(--accent);outline:none;font-size:15px}
+    button{padding:10px 14px;border-radius:8px;border:0;background:var(--accent);color:#061011;font-weight:600;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);font-weight:600}
+
+    .msg{height:18px;color:#ff8b8b;font-size:13px;margin-top:6px;text-align:center}
+    .hint{color:var(--muted);font-size:13px;text-align:center;margin-top:8px}
+
+    /* Congratulatory screen */
+    .final{display:none;flex-direction:column;align-items:center;gap:10px;padding:28px}
+    .final.show{display:flex}
+    .secret{font-size:28px;letter-spacing:3px;color:var(--accent);font-weight:700}
+
+    /* Audio control */
+    .audio-row{display:flex;justify-content:flex-end;margin-top:10px}
+    .audio-btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:6px 10px;border-radius:8px;cursor:pointer}
+
+    /* Responsive */
+    @media (max-width:480px){
+      .drawing{height:220px}
+      .card{padding:16px}
+      input[type="text"]{padding:10px}
+      .answers-bubble{display:none}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="main">
+      <!-- (Title removed as requested) -->
+
+      <!-- Stage: where drawings and input live -->
+      <div class="stage" id="stage">
+
+        <!-- Drawing container (will be populated via JS). 
+             Replace img1.png..img5.png with actual art files in same folder or update paths in JS. -->
+        <!-- Wrapper holds the drawing and the answers bubble (bubble shows correct answers already submitted).
+             The bubble alternates left/right per drawing for a playful effect. -->
+        <div class="drawing-wrapper" style="position:relative; width:100%;">
+          <div class="drawing" id="drawing-container">
+            <img id="drawing-img" src="img1.png" alt="drawing 1">
+          </div>
+
+          <!-- Answers bubble: chips of correct answers already submitted. 
+               Replace styling later if you want it on a fixed side. -->
+          <div id="answers-bubble" class="answers-bubble right" aria-hidden="true">
+            <!-- chips will be injected here -->
+          </div>
+        </div>
+
+        <!-- Controls: input + submit. Inputs are single, reused for all drawings -->
+        <div style="width:100%">
+          <div class="controls">
+            <input id="answer-input" type="text" placeholder="Type your answer here" autocomplete="off" aria-label="Answer">
+            <button id="submit-btn">Submit</button>
+          </div>
+          <div class="msg" id="message" aria-live="polite"></div>
+          <!-- Per-drawing hint / text placeholder. Replace each element via the `hints` array in JS. -->
+          <div class="hint" id="hint">Text placeholder 1</div>
+        </div>
+
+        <!-- Final congratulatory message shown after all 5 solved -->
+        <div class="final" id="final-screen" aria-hidden="true">
+          <div style="font-size:18px;color:var(--muted)">Well done!</div>
+          <!-- Instead of revealing a secret word, center the collected correct answers here. -->
+          <div class="secret" id="final-answers" style="font-size:20px;color:var(--accent);font-weight:700"></div>
+          <!-- Placeholder spot for later text or instructions. Update content programmatically or by editing this div. -->
+          <div id="final-note" style="color:var(--muted);font-size:14px;margin-top:6px">Text placeholder for later notes</div>
+        </div>
+
+        <!-- Optional audio controls. Replace audio.mp3 with your music file. -->
+        <div class="audio-row">
+          <button id="audio-toggle" class="audio-btn">Play Music</button>
+        </div>
+
+        <!-- Hidden audio element (muted autoplay allowed on some browsers). The player is optional. -->
+        <audio id="bg-audio" src="audio.mp3" loop muted autoplay></audio>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /*
+      Client-side JS for the drawing naming game.
+      - Change the `images` array to point to real image filenames or URLs.
+      - Change the `answers` array to actual answers (case-insensitive match).
+      - Replace each string in `hints` with the per-drawing text you want shown.
+      - Keep arrays aligned: images[i] corresponds to answers[i] and hints[i].
+    */
+
+    // IMAGE placeholders: replace with real files or paths
+    const images = [
+      'img1.png', // replace with first drawing
+      'img2.png',
+      'img3.png',
+      'img4.png',
+      'img5.png'
+    ];
+
+    // ANSWER placeholders: replace 'answer1'.. with the actual answers (lowercase matching is used)
+    const answers = [
+      'answer1',
+      'answer2',
+      'answer3',
+      'answer4',
+      'answer5'
+    ];
+
+    // Hints / per-drawing text placeholders. Update these to show different text per drawing.
+    const hints = [
+      'Text placeholder 1',
+      'Text placeholder 2',
+      'Text placeholder 3',
+      'Text placeholder 4',
+      'Text placeholder 5'
+    ];
+
+    // DOM refs
+    const imgEl = document.getElementById('drawing-img');
+    const containerEl = document.getElementById('drawing-container');
+    const answersBubble = document.getElementById('answers-bubble');
+    const hintEl = document.getElementById('hint');
+    const inputEl = document.getElementById('answer-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const msgEl = document.getElementById('message');
+    const finalScreen = document.getElementById('final-screen');
+    const finalAnswersEl = document.getElementById('final-answers');
+    const finalNoteEl = document.getElementById('final-note');
+    const audioEl = document.getElementById('bg-audio');
+    const audioBtn = document.getElementById('audio-toggle');
+
+    let idx = 0; // current drawing index
+    let busy = false; // block when animating
+    const submittedAnswers = []; // store canonical answers already solved
+
+    // Initialize UI
+    function init(){
+      loadIndex(idx);
+
+      // Submit on click
+      submitBtn.addEventListener('click', onSubmit);
+
+      // Submit on Enter key
+      inputEl.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter') onSubmit();
+      });
+
+      // Audio toggle
+      audioBtn.addEventListener('click', toggleAudio);
+
+      // If audio is autoplaying muted, reflect initial state
+      updateAudioButton();
+
+      // Ensure image gets fade-in when ready
+      imgEl.addEventListener('load', ()=>{ containerEl.classList.add('show'); });
+    }
+
+    // Load a particular index (update image, hint and answers-bubble position)
+    function loadIndex(i){
+      msgEl.textContent = '';
+      inputEl.value = '';
+      inputEl.focus();
+      // Hide image immediately for transition, then set src
+      containerEl.classList.remove('show');
+      // Update hint text for this drawing
+      hintEl.textContent = hints[i] || '';
+      // Position answers bubble: always keep it on the right
+      answersBubble.classList.remove('left'); answersBubble.classList.add('right');
+      // Update bubble contents
+      renderAnswersBubble();
+
+      // Small delay to allow CSS transition on image
+      setTimeout(()=>{
+        imgEl.src = images[i];
+        imgEl.alt = `drawing ${i+1}`;
+      }, 160);
+    }
+
+    // Render the answers bubble chips
+    function renderAnswersBubble(){
+      if(submittedAnswers.length === 0){
+        answersBubble.innerHTML = '';
+        answersBubble.setAttribute('aria-hidden','true');
+        return;
+      }
+      answersBubble.setAttribute('aria-hidden','false');
+      answersBubble.innerHTML = submittedAnswers.map(a => `<span class="chip">${escapeHtml(a)}</span>`).join('');
+    }
+
+    // Called when user submits an answer
+    function onSubmit(){
+      if(busy) return;
+      const val = inputEl.value.trim();
+      if(!val){
+        msgEl.textContent = 'Please enter an answer';
+        return;
+      }
+
+      // Compare case-insensitively
+      const expected = answers[idx].trim().toLowerCase();
+      if(val.toLowerCase() === expected){
+        // Correct: record canonical answer and move to next drawing (or finish)
+        msgEl.textContent = '';
+        // store the canonical answer for display (use the answers array value)
+        submittedAnswers.push(answers[idx]);
+        renderAnswersBubble();
+        goToNext();
+      } else {
+        // Incorrect
+        msgEl.textContent = 'Try again';
+      }
+    }
+
+    // Transition to next drawing with a small animation
+    function goToNext(){
+      busy = true;
+      // fade-out current
+      containerEl.classList.remove('show');
+      // short delay to allow fade-out
+      setTimeout(()=>{
+        idx += 1;
+        if(idx >= images.length){
+          // finished all drawings
+          showFinal();
+        } else {
+          loadIndex(idx);
+          // small delay to re-enable
+          setTimeout(()=>{ busy = false; }, 500);
+        }
+      }, 420);
+    }
+
+    // Show final congratulatory message centering the collected correct answers
+    function showFinal(){
+      // Hide stage controls (everything except .final)
+      document.getElementById('stage').querySelectorAll(':scope > :not(.final)').forEach(el=>el.style.display='none');
+      // Reveal final screen
+      finalScreen.classList.add('show');
+      finalScreen.setAttribute('aria-hidden','false');
+      // Center the collected correct answers (do not reveal any secret word)
+      if(submittedAnswers.length === 0){
+        finalAnswersEl.textContent = 'No answers submitted.';
+      } else {
+        finalAnswersEl.innerHTML = submittedAnswers.map(a => `<span class="chip">${escapeHtml(a)}</span>`).join(' ');
+      }
+      // final note is left as a placeholder for later text (editable in file or via JS)
+      // Optional: stop audio
+      try{ audioEl.pause(); }catch(e){}
+      busy = false;
+    }
+
+    // Audio controls
+    function toggleAudio(){
+      if(audioEl.paused){
+        audioEl.muted = false;
+        audioEl.play().catch(()=>{});
+      } else {
+        audioEl.pause();
+      }
+      updateAudioButton();
+    }
+
+    function updateAudioButton(){
+      if(!audioEl) return;
+      if(audioEl.paused){
+        audioBtn.textContent = 'Play Music';
+      } else if(audioEl.muted){
+        audioBtn.textContent = 'Unmute Music';
+      } else {
+        audioBtn.textContent = 'Pause Music';
+      }
+    }
+
+    // Utility: escape HTML for safety when injecting user-visible strings
+    function escapeHtml(s){
+      return String(s).replace(/[&<>\"']/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":"&#39;"}[c];
+      });
+    }
+
+    // Accessible nicety: update button when playback state changes
+    audioEl.addEventListener('play', updateAudioButton);
+    audioEl.addEventListener('pause', updateAudioButton);
+    audioEl.addEventListener('volumechange', updateAudioButton);
+
+    // Kick things off
+    init();
+
+    // Expose helper for debugging in console (optional)
+    window.__puzzle = {images,answers,hints,loadIndex,goToNext,submittedAnswers};
+  </script>
+</body>
+</html>
